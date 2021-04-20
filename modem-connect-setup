@@ -1,0 +1,20 @@
+#!/bin/bash
+
+# This script installs the different files at the right places.
+
+# Checks for root privileges.
+if [ $(id -u) != 0 ]; then
+	echo "Please run as root."
+	exit 1
+fi
+
+# The scripts, to be places in /usr/bin
+cp ./modem-connect /usr/bin/
+cp ./modem-connect-start /usr/bin/
+cp ./modem-connect-stop /usr/bin/
+
+# The systemd service file to be places in
+cp ./modem-connect.service /lib/systemd/system/
+
+# The bash autocompletion to be placed in
+cp ./modem-connect-completion.bash /etc/bash_completion.d/

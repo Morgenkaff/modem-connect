@@ -1,0 +1,5 @@
+#!/bin/bash
+
+echo "Modem connection service started."
+
+while modem-connect -c; do sleep 10; done
