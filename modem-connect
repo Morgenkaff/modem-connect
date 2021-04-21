@@ -63,11 +63,7 @@ setup_connection() {
 	/usr/sbin/ip link set wwan0 up
 
 	# give it some time to do it's thing
-<<<<<<< HEAD
 	$(sleep 4)
-=======
-	$(sleep 2)
->>>>>>> main
 
 	# Make the initial connection the the network
 	/usr/bin/qmicli -d /dev/cdc-wdm0 --device-open-net='net-raw-ip|net-no-qos-header' --wds-start-network=internet --client-no-release-cid
