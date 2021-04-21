@@ -38,8 +38,8 @@ interface_exists() {
 # check connection to internet
 have_internet() {
 
-	ping_url=$(ping -q -I wwan0 -w 1 -c 1 google.com 2> /dev/null)
-	ping_ip=$(ping -q -I wwan0 -w 1 -c 1 1.1.1.1 2> /dev/null)
+	ping_url=$(ping -q -I wwan0 -w 2 -c 1 google.com 2> /dev/null)
+	ping_ip=$(ping -q -I wwan0 -w 2 -c 1 1.1.1.1 2> /dev/null)
 
 	if [ "$ping_url" ] && [ "$ping_ip" ]; then
 		return 0
