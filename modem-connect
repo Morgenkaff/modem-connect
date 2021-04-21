@@ -38,7 +38,14 @@ interface_exists() {
 # check connection to internet
 have_internet() {
 
+<<<<<<< HEAD
+	ping_url=$(ping -q -I wwan0 -w 1 -c 1 google.com 2> /dev/null)
+	ping_ip=$(ping -q -I wwan0 -w 1 -c 1 1.1.1.1 2> /dev/null)
+
+	if [ "$ping_url" ] && [ "$ping_ip" ]; then
+=======
 	if [[ "$(ping -q -I wwan0 -w 1 -c 1 1.1.1.1 2> /dev/null)" ]]; then
+>>>>>>> main
 		return 0
 	else
 		return 1
@@ -60,7 +67,11 @@ setup_connection() {
 	/usr/sbin/ip link set wwan0 up
 
 	# give it some time to do it's thing
+<<<<<<< HEAD
+	$(sleep 4)
+=======
 	$(sleep 2)
+>>>>>>> main
 
 	# Make the initial connection the the network
 	/usr/bin/qmicli -d /dev/cdc-wdm0 --device-open-net='net-raw-ip|net-no-qos-header' --wds-start-network=internet --client-no-release-cid
