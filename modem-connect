@@ -38,8 +38,9 @@ interface_exists() {
 # check connection to internet
 have_internet() {
 
-	ping_url=$(ping -q -I wwan0 -w 2 -c 1 google.com 2> /dev/null)
-	ping_ip=$(ping -q -I wwan0 -w 2 -c 1 1.1.1.1 2> /dev/null)
+	# Used 2 ping. 1 to a URL, 1 to a IP. They are ANDed later in the if statement.
+	ping_url=$(ping -q -I wwan0 -W 4 -w 4 -c 2 one.one.one.one 2> /dev/null)
+	ping_ip=$(ping -q -I wwan0 -W 4 -w 4 -c 2 1.1.1.1 2> /dev/null)
 
 	if [ "$ping_url" ] && [ "$ping_ip" ]; then
 		return 0
@@ -146,10 +147,10 @@ while (( "$#" )); do
 done
 
 if [ "$modem_action" = 0 ]; then
-	log "Connecting modem"
+#	log "Connecting modem"
 	connect
 elif [ "$modem_action" = 1 ]; then
-	log "Disconnecting modem"
+#	log "Disconnecting modem"
 	disconnect
 fi
 
