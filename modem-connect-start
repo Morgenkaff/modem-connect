@@ -2,4 +2,4 @@
 
 echo "Modem connection service started."
 
-while modem-connect -c; do sleep 30; done
+while modem-connect -c; do sleep 60; done

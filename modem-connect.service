@@ -8,9 +8,9 @@ Documentation=https://github.com/Morgenkaff/Modem-connect
 After=network.target syslog.target
 
 [Service]
-Type=oneshot
+Type=exec
 ExecStart=/usr/bin/modem-connect-start
-#RemainAfterExit=true
+RemainAfterExit=true
 ExecStop=/usr/bin/modem-connect-stop
 StandardOutput=journal
 

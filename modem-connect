@@ -2,6 +2,8 @@
 
 # This script (together with modem-connect-start and modem_connect-stop)
 # is used to control a usb modem as was it a service.
+# Lot of information and inspiration was taking from:
+# https://docs.sixfab.com/page/setting-up-a-data-connection-over-qmi-interface-using-libqmi
 
 # First some sort of logging control
 log() {
@@ -38,11 +40,11 @@ interface_exists() {
 # check connection to internet
 have_internet() {
 
-	# Used 2 ping. 1 to a URL, 1 to a IP. They are ANDed later in the if statement.
-	ping_url=$(ping -q -I wwan0 -W 4 -w 4 -c 2 one.one.one.one 2> /dev/null)
-	ping_ip=$(ping -q -I wwan0 -W 4 -w 4 -c 2 1.1.1.1 2> /dev/null)
+	#wget -q --tries=10 --timeout=30 --spider one.one.one.one
+	ping1=$(ping -q -c 1 -w 1 -W 1 one.one.one.one &> /dev/null ; echo $?)
+	ping2=$(ping -q -c 1 -w 1 -W 1 1.0.0.1 &> /dev/null ; echo $?)
 
-	if [ "$ping_url" ] && [ "$ping_ip" ]; then
+	if [ "$ping1" = 0 ] || [ "$ping2" = 0 ]; then
 		return 0
 	else
 		return 1
@@ -54,23 +56,53 @@ have_internet() {
 # https://docs.sixfab.com/page/setting-up-a-data-connection-over-qmi-interface-using-libqmi
 setup_connection() {
 
+	# Check if modem is ready/online
+
+	log "Checking state of modem."
+	# If the modem is not ready/online reset the modem
+	if [[ ! $(qmicli -d /dev/cdc-wdm0 --dms-get-operating-mode | grep online) ]]; then
+		log "Modem not online, resetting."
+		$(qmicli -d /dev/cdc-wdm0 --dms-set-operating-mode='reset' &> /dev/null)
+		$(sleep 30)
+		# Test conneciton again
+		if [[ !	$(qmicli -d /dev/cdc-wdm0 --dms-get-operating-mode | grep online) ]]; then
+			log 1 "Modem not ready/online."
+			exit 1
+		fi
+	else
+		log "Modem is online."
+	fi
+
+	# Setup for raw-ip
+	log "Enabling raw-ip"
+
 	# First taking the interface down
-	/usr/sbin/ip link set wwan0 down
+	$(/usr/sbin/ip link set wwan0 down)
 
 	# Enabling the use of raw-ip
-	echo 'Y' | tee /sys/class/net/wwan0/qmi/raw_ip
+	$(echo 'Y' | tee /sys/class/net/wwan0/qmi/raw_ip)
 
 	# Setting the interface back up
-	/usr/sbin/ip link set wwan0 up
+	$(/usr/sbin/ip link set wwan0 up)
 
 	# give it some time to do it's thing
-	$(sleep 4)
+	$(sleep 2)
 
 	# Make the initial connection the the network
-	/usr/bin/qmicli -d /dev/cdc-wdm0 --device-open-net='net-raw-ip|net-no-qos-header' --wds-start-network=internet --client-no-release-cid
+	log "Connecting to network"
+	/usr/bin/qmicli -d /dev/cdc-wdm0 --device-open-net='net-raw-ip|net-no-qos-header' --wds-start-network="apn='internet',ip-type=4" --client-no-release-cid
+
+	# sleep a bit more, should make some better checks..
+	$(sleep 4)
 
 	# Getting an IP address
+	log "Requesting IP"
 	/usr/sbin/udhcpc -q -f -i wwan0
+
+	# Lastly the iptables should be restored, so to enable the NAT
+	log "Setting iptables up for NAT to ens8p0 (ethernet)."
+	iptables-restore < /etc/iptables.rules
+
 }
 
 connect() {
@@ -116,6 +148,13 @@ if [ $(id -u) != 0 ]; then
 	exit 1
 fi
 
+# Check if there is given any arguments. Print error and help if not.
+if [ "$#" = 0 ]; then
+	log 1 "Cannot run without arguments."
+	print_help
+	exit 1
+fi
+
 # Paring the arguments
 while (( "$#" )); do
 	case "$1" in
@@ -147,10 +186,9 @@ while (( "$#" )); do
 done
 
 if [ "$modem_action" = 0 ]; then
-#	log "Connecting modem"
+	log "Connecting modem"
 	connect
 elif [ "$modem_action" = 1 ]; then
-#	log "Disconnecting modem"
+	log "Disconnecting modem"
 	disconnect
 fi
-
