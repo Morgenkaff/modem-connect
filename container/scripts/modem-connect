@@ -1,0 +1,194 @@
+#!/bin/bash
+
+# This script (together with modem-connect-start and modem_connect-stop)
+# is used to control a usb modem as was it a service.
+# Lot of information and inspiration was taking from:
+# https://docs.sixfab.com/page/setting-up-a-data-connection-over-qmi-interface-using-libqmi
+
+# First some sort of logging control
+log() {
+
+	help_text="See modem-connect --help for more info. "
+
+	if [ "$1" = 1 ]; then
+		echo -e "Failed to run script. $2"
+		echo -e $help_text
+	elif [ "$1" != 1 ] && [ "$verbose" = 1 ]; then
+		echo -e $1
+	fi
+}
+
+# Function to print a help text in "its own" echo instead of using the logger.
+print_help() {
+	echo -e "This is 'help'. (Which really should be written by now...)\n\nBut this script should be run with at least 1 flag.\nThe supported flags are:\n-c  --connect    : Connects the modem, if the wwan0 interface exists and is not already connected.\n		   Takes precedens of -d/--disconnect, if both are used.\n-d  --disconnect : Disconnects the modem (by taking the wwan0 interface down).\n-h  --help       : Shows this help text.\n-v  --verbose    : Set output to verbose. (Lots of log.)\n"
+}
+
+# Check if the interface (modem) is connected (and named wwan0)
+# Should prevent the problem with the wierd name (the wwx23098rglkj349-ish name)
+interface_exists() {
+
+	# Check if the interface exists, if the cat gives an error, just ignore i (2> /dev/null)
+	wwan0_state=$(cat /sys/class/net/wwan0/operstate 2> /dev/null)
+
+	if [ "$wwan0_state" = "up" ] || [ "$wwan0_state" = "down" ] || [ "$wwan0_state" = "unknown" ]; then
+		return 0
+	else
+		return 1
+	fi
+}
+
+# check connection to internet
+have_internet() {
+
+	#wget -q --tries=10 --timeout=30 --spider one.one.one.one
+	ping1=$(ping -q -c 1 -w 1 -W 1 one.one.one.one &> /dev/null ; echo $?)
+	ping2=$(ping -q -c 1 -w 1 -W 1 1.0.0.1 &> /dev/null ; echo $?)
+
+	if [ "$ping1" = 0 ] || [ "$ping2" = 0 ]; then
+		return 0
+	else
+		return 1
+	fi
+}
+
+# Code to connect the usb modem
+# commands taken from this giude:
+# https://docs.sixfab.com/page/setting-up-a-data-connection-over-qmi-interface-using-libqmi
+setup_connection() {
+
+	# Check if modem is ready/online
+
+	log "Checking state of modem."
+	# If the modem is not ready/online reset the modem
+	if [[ ! $(qmicli -d /dev/cdc-wdm0 --dms-get-operating-mode | grep online) ]]; then
+		log "Modem not online, resetting."
+		$(qmicli -d /dev/cdc-wdm0 --dms-set-operating-mode='reset' &> /dev/null)
+		$(sleep 30)
+		# Test conneciton again
+		if [[ !	$(qmicli -d /dev/cdc-wdm0 --dms-get-operating-mode | grep online) ]]; then
+			log 1 "Modem not ready/online."
+			exit 1
+		fi
+	else
+		log "Modem is online."
+	fi
+
+	# Setup for raw-ip
+	log "Enabling raw-ip"
+
+	# First taking the interface down
+	$(/usr/sbin/ip link set wwan0 down)
+
+	# Enabling the use of raw-ip
+	$(echo 'Y' | tee /sys/class/net/wwan0/qmi/raw_ip)
+
+	# Setting the interface back up
+	$(/usr/sbin/ip link set wwan0 up)
+
+	# give it some time to do it's thing
+	$(sleep 2)
+
+	# Make the initial connection the the network
+	log "Connecting to network"
+	/usr/bin/qmicli -d /dev/cdc-wdm0 --device-open-net='net-raw-ip|net-no-qos-header' --wds-start-network="apn='internet',ip-type=4" --client-no-release-cid
+
+	# sleep a bit more, should make some better checks..
+	$(sleep 4)
+
+	# Getting an IP address
+	log "Requesting IP"
+	/usr/sbin/udhcpc -q -f -i wwan0
+
+	# Lastly the iptables should be restored, so to enable the NAT
+	log "Setting iptables up for NAT to ens8p0 (ethernet)."
+	iptables-restore < /etc/iptables.rules
+
+}
+
+connect() {
+
+	# Check if the interface exists:
+	if interface_exists; then
+		log "Modem is inserted and named wwan0.\nTesting connection."
+		# Check if there is connection to the internet
+		if have_internet; then
+			log "Already connected to the internet. No need to connect again."
+		else
+			log "Not connected to the internet. Going to connect the modem:"
+			# If not, connect the modem and set up IP
+			setup_connection
+			# Check if the connection have been established
+			if have_internet; then
+				log "Connection to the internet established."
+			else
+				log 1 "Connection to the internet NOT established."
+			fi
+		fi
+	else
+		log 1 "Modem is not inserted, interface does not exists or is not named wwan0."
+		# SOME SORT OF ERROR-LIGHT SHOULD BE ENABLED HERE
+		exit 0
+	fi
+}
+
+
+# This function disconnects the modem
+# For a start just taking the interface down
+disconnect() {
+
+	ip link set wwan0 down
+}
+
+# THE ACTUAL RUNNING LOGIC
+
+# Fist check if the script have root privileges
+# Exit with error if not
+if [ $(id -u) != 0 ]; then
+	log 1 "Please run this script as root."
+	exit 1
+fi
+
+# Check if there is given any arguments. Print error and help if not.
+if [ "$#" = 0 ]; then
+	log 1 "Cannot run without arguments."
+	print_help
+	exit 1
+fi
+
+# Paring the arguments
+while (( "$#" )); do
+	case "$1" in
+		-v | --verbose)
+			verbose=1
+			shift
+			;;
+		-h | --help)
+			print_help
+			exit 1
+			;;
+		-c | --connect)
+			modem_action=0
+			shift
+			;;
+		-d | --disconnect)
+			modem_action=1
+			shift
+			;;
+		-* | --*)
+			log 1 "Unsupported flag $1" >&2
+			exit 1
+			;;
+		*)
+			log 1
+			exit 1
+			;;
+	esac
+done
+
+if [ "$modem_action" = 0 ]; then
+	log "Connecting modem"
+	connect
+elif [ "$modem_action" = 1 ]; then
+	log "Disconnecting modem"
+	disconnect
+fi

@@ -1,0 +1,16 @@
+#!/bin/bash
+
+# Script to stop the modem-connect service
+# This is done by killing the "start-script",
+# which is running a 10 seconds loop and then running
+# modem-connect -d (command to disconnect the modem)
+
+# Killing the start-script
+echo "Stopping the modem connection service."
+pkill -f modem-connect-start
+
+# Sleeping is probably not nessesary
+sleep 1
+
+echo "Diconnecting modem."
+modem-connect -d

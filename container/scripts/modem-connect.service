@@ -1,0 +1,18 @@
+# Service file for modem-connect script.
+# Used for connecting and disconnecting the modem,
+# by starting or stopping this sergice.
+
+[Unit]
+Description=Modem-connect deamon
+Documentation=https://github.com/Morgenkaff/Modem-connect
+After=network.target syslog.target
+
+[Service]
+Type=exec
+ExecStart=/usr/bin/modem-connect-start
+RemainAfterExit=true
+ExecStop=/usr/bin/modem-connect-stop
+StandardOutput=journal
+
+[Install]
+WantedBy=multi-user.target
