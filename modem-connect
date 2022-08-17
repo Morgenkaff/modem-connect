@@ -101,7 +101,7 @@ setup_connection() {
 
 	# Lastly the iptables should be restored, so to enable the NAT
 	log "Setting iptables up for NAT to ens8p0 (ethernet)."
-	iptables-restore < /etc/iptables.rules
+	iptables-restore < /etc/iptables/rules.v4
 
 }
 

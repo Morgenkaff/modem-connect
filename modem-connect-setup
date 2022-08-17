@@ -28,3 +28,5 @@ iptables -t nat -A POSTROUTING -o wwan0 -j MASQUERADE
 # Forwarding between modem and ethernet
 iptables -A FORWARD -i eth0 -o wwan0 -j ACCEPT
 iptables -A FORWARD -i wwan0 -o eth0 -j ACCEPT
+
+iptables-save > /etc/iptables/rules.v4
